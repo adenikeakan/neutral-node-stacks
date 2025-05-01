@@ -1,4 +1,11 @@
 ;; NeutralNode: Proof-of-Neutrality for Critical Infrastructure
+;; proof-registry.clar - Contract for storing and validating proofs
+;;
+;; This contract manages:
+;; - Storage of neutrality proofs
+;; - Validation of zero-knowledge proofs
+;; - Tracking of proof verification history
+;; - Linking proofs to verification sessions
 
 ;; Constants
 (define-constant CONTRACT-OWNER tx-sender)
@@ -121,6 +128,7 @@
 )
 
 ;; Verify a proof - this is a simplified implementation
+;; In a production version, this would contain advanced zero-knowledge proof verification
 (define-public (verify-proof
                 (proof-id uint)
                 (verification-result bool)
@@ -141,6 +149,7 @@
         )
         
         ;; For now, we immediately update the proof status based on the result
+        ;; In a production version, this would require consensus among multiple verifiers
         (if verification-result
           (map-set detailed-proofs
             { proof-id: proof-id }
@@ -271,4 +280,11 @@
 ;; Get the last proof ID
 (define-read-only (get-last-proof-id)
   (var-get last-proof-id)
+)
+
+;; Calculate the verification consensus for a proof
+;; Returns the percentage of verifiers who approved the proof, multiplied by 100 (for precision)
+;; e.g., if 3 of 4 verifiers approved, returns 75
+(define-read-only (get-verification-consensus (proof-id uint))
+  (ok u0) ;; This is a placeholder - in a real implementation, this would compute consensus
 )
