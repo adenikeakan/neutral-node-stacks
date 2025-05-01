@@ -1,6 +1,11 @@
 ;; NeutralNode: Proof-of-Neutrality for Critical Infrastructure
+;; neutrality-core.clar - Core contract for neutrality verification
 ;;
-;; Added basic proof tracking
+;; This contract handles the core functionality of the neutrality verification system:
+;; - Registration of infrastructure providers
+;; - Storage of verification metadata
+;; - Management of verification sessions
+;; - Core data structures for the neutrality system
 
 ;; Constants
 (define-constant CONTRACT-OWNER tx-sender)
@@ -10,7 +15,7 @@
 (define-constant ERR-INVALID-INPUT (err u400))
 (define-constant ERR-VERIFICATION-FAILED (err u500))
 
-;; Provider types
+;; Provider types - Different kinds of infrastructure that can be verified
 (define-constant PROVIDER-TYPE-CDN u1)      ;; Content Delivery Networks
 (define-constant PROVIDER-TYPE-DNS u2)      ;; Domain Name Systems
 (define-constant PROVIDER-TYPE-API u3)      ;; API Services
@@ -87,6 +92,7 @@
 ;; Public functions
 
 ;; Register a new infrastructure provider
+;; Only the provider themselves can register
 (define-public (register-provider 
                 (name (string-ascii 64))
                 (provider-type uint)
@@ -168,12 +174,14 @@
 )
 
 ;; Start a new verification session for a provider
+;; This will be expanded to integrate with the verifier registry in later phases
 (define-public (start-verification-session (provider-id uint))
   (let
     (
       (new-session-id (+ (var-get last-session-id) u1))
     )
     ;; Check authorization - for now only the provider can start a session
+    ;; Later this will be expanded to include authorized verifiers
     (asserts! (is-provider-owner provider-id) ERR-NOT-AUTHORIZED)
     
     ;; Ensure provider exists and is active
@@ -204,6 +212,7 @@
 )
 
 ;; Complete a verification session
+;; This will be expanded in later phases to include consensus among verifiers
 (define-public (complete-verification-session 
                 (session-id uint)
                 (merkle-root (buff 32)))
@@ -238,6 +247,7 @@
 )
 
 ;; Submit a proof for a verification session
+;; In a later phase, this will be restricted to registered verifiers
 (define-public (submit-verification-proof
                 (session-id uint)
                 (proof-hash (buff 32))
@@ -258,6 +268,19 @@
             submission-time: block-height,
             verifier: tx-sender,
             metadata: metadata
+          }
+        )
+        
+        ;; Update the session's verifier count
+        (map-set verification-sessions
+          { session-id: session-id }
+          {
+            provider-id: (get provider-id session),
+            start-time: (get start-time session),
+            end-time: (get end-time session),
+            verifier-count: (+ (get verifier-count session) u1),
+            status: (get status session),
+            merkle-root: (get merkle-root session)
           }
         )
         
