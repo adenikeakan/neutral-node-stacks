@@ -37,6 +37,15 @@
   }
 )
 
+;; Map to store verification parameters for different proof types
+(define-map verification-parameters
+  { proof-type: uint }
+  {
+    public-inputs-required: bool,
+    verification-key: (optional (buff 1024))
+  }
+)
+
 ;; Map to track which proofs have been verified by which principals
 ;; This helps create a consensus mechanism for proof validity
 (define-map proof-verifications
@@ -170,11 +179,46 @@
   )
 )
 
+;; Set verification parameters for a proof type (owner only)
+(define-public (set-verification-parameters
+                (proof-type uint)
+                (public-inputs-required bool)
+                (verification-key (optional (buff 1024))))
+  (begin
+    ;; Only contract owner can set verification parameters
+    (asserts! (is-contract-owner) ERR-NOT-AUTHORIZED)
+    
+    ;; Ensure proof type is valid
+    (asserts! (or 
+                (is-eq proof-type PROOF-TYPE-MERKLE)
+                (is-eq proof-type PROOF-TYPE-ZK-SNARK)
+                (is-eq proof-type PROOF-TYPE-HASH-COMPARE)
+                (is-eq proof-type PROOF-TYPE-SIGNATURE))
+              ERR-INVALID-INPUT)
+    
+    ;; Set the parameters
+    (map-set verification-parameters
+      { proof-type: proof-type }
+      {
+        public-inputs-required: public-inputs-required,
+        verification-key: verification-key
+      }
+    )
+    
+    (ok true)
+  )
+)
+
 ;; Read-only functions
 
 ;; Get proof details
 (define-read-only (get-proof-details (proof-id uint))
   (map-get? detailed-proofs { proof-id: proof-id })
+)
+
+;; Get verification parameters for a proof type
+(define-read-only (get-verification-parameters (proof-type uint))
+  (map-get? verification-parameters { proof-type: proof-type })
 )
 
 ;; Get a verification for a specific proof and verifier
