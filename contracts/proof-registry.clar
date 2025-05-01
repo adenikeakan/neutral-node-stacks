@@ -6,6 +6,7 @@
 (define-constant ERR-NOT-FOUND (err u404))
 (define-constant ERR-ALREADY-REGISTERED (err u409))
 (define-constant ERR-INVALID-INPUT (err u400))
+(define-constant ERR-VERIFICATION-FAILED (err u500))
 
 ;; Proof status codes
 (define-constant PROOF-STATUS-PENDING u0)
@@ -33,6 +34,17 @@
     verification-time: (optional uint),
     verifier: principal,
     metadata: (optional (string-utf8 256))
+  }
+)
+
+;; Map to track which proofs have been verified by which principals
+;; This helps create a consensus mechanism for proof validity
+(define-map proof-verifications
+  { proof-id: uint, verifier: principal }
+  {
+    verification-time: uint,
+    verification-result: bool,
+    verification-data: (optional (buff 256))
   }
 )
 
@@ -99,11 +111,75 @@
   )
 )
 
+;; Verify a proof - this is a simplified implementation
+(define-public (verify-proof
+                (proof-id uint)
+                (verification-result bool)
+                (verification-data (optional (buff 256))))
+  (begin
+    ;; Ensure proof exists
+    (match (map-get? detailed-proofs { proof-id: proof-id })
+      proof 
+      (begin
+        ;; Record this verification
+        (map-set proof-verifications
+          { proof-id: proof-id, verifier: tx-sender }
+          {
+            verification-time: block-height,
+            verification-result: verification-result,
+            verification-data: verification-data
+          }
+        )
+        
+        ;; For now, we immediately update the proof status based on the result
+        (if verification-result
+          (map-set detailed-proofs
+            { proof-id: proof-id }
+            {
+              provider-id: (get provider-id proof),
+              session-id: (get session-id proof),
+              proof-type: (get proof-type proof),
+              proof-data: (get proof-data proof),
+              verification-status: PROOF-STATUS-VERIFIED,
+              submission-time: (get submission-time proof),
+              verification-time: (some block-height),
+              verifier: (get verifier proof),
+              metadata: (get metadata proof)
+            }
+          )
+          (map-set detailed-proofs
+            { proof-id: proof-id }
+            {
+              provider-id: (get provider-id proof),
+              session-id: (get session-id proof),
+              proof-type: (get proof-type proof),
+              proof-data: (get proof-data proof),
+              verification-status: PROOF-STATUS-INVALID,
+              submission-time: (get submission-time proof),
+              verification-time: (some block-height),
+              verifier: (get verifier proof),
+              metadata: (get metadata proof)
+            }
+          )
+        )
+        
+        (ok true)
+      )
+      ERR-NOT-FOUND
+    )
+  )
+)
+
 ;; Read-only functions
 
 ;; Get proof details
 (define-read-only (get-proof-details (proof-id uint))
   (map-get? detailed-proofs { proof-id: proof-id })
+)
+
+;; Get a verification for a specific proof and verifier
+(define-read-only (get-proof-verification (proof-id uint) (verifier principal))
+  (map-get? proof-verifications { proof-id: proof-id, verifier: verifier })
 )
 
 ;; Get the last proof ID
