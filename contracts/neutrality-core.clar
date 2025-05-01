@@ -1,6 +1,6 @@
 ;; NeutralNode: Proof-of-Neutrality for Critical Infrastructure
 ;;
-;; Basic contract structure with provider registration
+;; Provider registration and management
 
 ;; Constants
 (define-constant CONTRACT-OWNER tx-sender)
@@ -13,6 +13,8 @@
 (define-constant PROVIDER-TYPE-CDN u1)      ;; Content Delivery Networks
 (define-constant PROVIDER-TYPE-DNS u2)      ;; Domain Name Systems
 (define-constant PROVIDER-TYPE-API u3)      ;; API Services
+(define-constant PROVIDER-TYPE-CLOUD u4)    ;; Cloud Computing Providers
+(define-constant PROVIDER-TYPE-ISP u5)      ;; Internet Service Providers
 (define-constant PROVIDER-TYPE-OTHER u99)   ;; Other infrastructure types
 
 ;; Data Maps
@@ -25,7 +27,8 @@
     provider-principal: principal,
     provider-type: uint,
     registration-time: uint,
-    active: bool
+    active: bool,
+    metadata-url: (optional (string-utf8 256))
   }
 )
 
@@ -52,7 +55,8 @@
 ;; Register a new infrastructure provider
 (define-public (register-provider 
                 (name (string-ascii 64))
-                (provider-type uint))
+                (provider-type uint)
+                (metadata-url (optional (string-utf8 256))))
   (let
     (
       (new-provider-id (+ (var-get last-provider-id) u1))
@@ -62,6 +66,8 @@
                 (is-eq provider-type PROVIDER-TYPE-CDN)
                 (is-eq provider-type PROVIDER-TYPE-DNS)
                 (is-eq provider-type PROVIDER-TYPE-API)
+                (is-eq provider-type PROVIDER-TYPE-CLOUD)
+                (is-eq provider-type PROVIDER-TYPE-ISP)
                 (is-eq provider-type PROVIDER-TYPE-OTHER))
               ERR-INVALID-INPUT)
     
@@ -73,7 +79,8 @@
         provider-principal: tx-sender,
         provider-type: provider-type,
         registration-time: block-height,
-        active: true
+        active: true,
+        metadata-url: metadata-url
       }
     )
     
@@ -82,6 +89,47 @@
     
     ;; Return the new provider ID
     (ok new-provider-id)
+  )
+)
+
+;; Update provider information (only the provider can update their own info)
+(define-public (update-provider
+                (provider-id uint)
+                (name (string-ascii 64))
+                (provider-type uint)
+                (metadata-url (optional (string-utf8 256)))
+                (active bool))
+  (begin
+    ;; Check authorization
+    (asserts! (is-provider-owner provider-id) ERR-NOT-AUTHORIZED)
+    
+    ;; Ensure provider exists
+    (asserts! (is-some (map-get? providers { provider-id: provider-id })) ERR-NOT-FOUND)
+    
+    ;; Ensure provider type is valid
+    (asserts! (or 
+                (is-eq provider-type PROVIDER-TYPE-CDN)
+                (is-eq provider-type PROVIDER-TYPE-DNS)
+                (is-eq provider-type PROVIDER-TYPE-API)
+                (is-eq provider-type PROVIDER-TYPE-CLOUD)
+                (is-eq provider-type PROVIDER-TYPE-ISP)
+                (is-eq provider-type PROVIDER-TYPE-OTHER))
+              ERR-INVALID-INPUT)
+    
+    ;; Update provider data
+    (map-set providers
+      { provider-id: provider-id }
+      {
+        name: name,
+        provider-principal: tx-sender,
+        provider-type: provider-type,
+        registration-time: (get registration-time (unwrap-panic (map-get? providers { provider-id: provider-id }))),
+        active: active,
+        metadata-url: metadata-url
+      }
+    )
+    
+    (ok true)
   )
 )
 
