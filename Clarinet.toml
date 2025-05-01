@@ -4,6 +4,9 @@ authors = []
 description = ""
 telemetry = true
 requirements = []
+[contracts.neutrality-core]
+path = "contracts/neutrality-core.clar"
+depends_on = []
 
 [repl]
 costs_version = 2
