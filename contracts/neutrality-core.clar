@@ -1,6 +1,6 @@
 ;; NeutralNode: Proof-of-Neutrality for Critical Infrastructure
 ;;
-;; Added basic verification sessions
+;; Complete session management functionality
 
 ;; Constants
 (define-constant CONTRACT-OWNER tx-sender)
@@ -189,6 +189,40 @@
     
     ;; Return the new session ID
     (ok new-session-id)
+  )
+)
+
+;; Complete a verification session
+(define-public (complete-verification-session 
+                (session-id uint)
+                (merkle-root (buff 32)))
+  (begin
+    ;; Ensure session exists and is active
+    (match (map-get? verification-sessions { session-id: session-id })
+      session 
+      (begin
+        ;; Check authorization - only the provider can complete a session for now
+        (asserts! (is-provider-owner (get provider-id session)) ERR-NOT-AUTHORIZED)
+        ;; Check session is active
+        (asserts! (is-eq (get status session) u1) ERR-INVALID-INPUT)
+        
+        ;; Update the session as completed
+        (map-set verification-sessions
+          { session-id: session-id }
+          {
+            provider-id: (get provider-id session),
+            start-time: (get start-time session),
+            end-time: (some block-height),
+            verifier-count: (get verifier-count session),
+            status: u2, ;; Completed
+            merkle-root: (some merkle-root)
+          }
+        )
+        
+        (ok true)
+      )
+      ERR-NOT-FOUND
+    )
   )
 )
 
