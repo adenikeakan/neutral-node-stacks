@@ -1,6 +1,6 @@
 ;; NeutralNode: Proof-of-Neutrality for Critical Infrastructure
 ;;
-;; Provider registration and management
+;; Added basic verification sessions
 
 ;; Constants
 (define-constant CONTRACT-OWNER tx-sender)
@@ -8,6 +8,7 @@
 (define-constant ERR-NOT-FOUND (err u404))
 (define-constant ERR-ALREADY-REGISTERED (err u409))
 (define-constant ERR-INVALID-INPUT (err u400))
+(define-constant ERR-VERIFICATION-FAILED (err u500))
 
 ;; Provider types
 (define-constant PROVIDER-TYPE-CDN u1)      ;; Content Delivery Networks
@@ -32,8 +33,22 @@
   }
 )
 
+;; Map to track verification sessions - each session represents a period of monitoring
+(define-map verification-sessions
+  { session-id: uint }
+  {
+    provider-id: uint,
+    start-time: uint,
+    end-time: (optional uint),
+    verifier-count: uint,
+    status: uint,  ;; 0 = pending, 1 = active, 2 = completed, 3 = failed
+    merkle-root: (optional (buff 32))
+  }
+)
+
 ;; Variables
 (define-data-var last-provider-id uint u0)
+(define-data-var last-session-id uint u0)
 
 ;; Private functions
 
@@ -46,6 +61,14 @@
 (define-private (is-provider-owner (provider-id uint))
   (match (map-get? providers { provider-id: provider-id })
     provider (is-eq tx-sender (get provider-principal provider))
+    false
+  )
+)
+
+;; Check if a verification session exists and is in the expected status
+(define-private (is-valid-session (session-id uint) (expected-status uint))
+  (match (map-get? verification-sessions { session-id: session-id })
+    session (is-eq (get status session) expected-status)
     false
   )
 )
@@ -133,6 +156,42 @@
   )
 )
 
+;; Start a new verification session for a provider
+(define-public (start-verification-session (provider-id uint))
+  (let
+    (
+      (new-session-id (+ (var-get last-session-id) u1))
+    )
+    ;; Check authorization - for now only the provider can start a session
+    (asserts! (is-provider-owner provider-id) ERR-NOT-AUTHORIZED)
+    
+    ;; Ensure provider exists and is active
+    (match (map-get? providers { provider-id: provider-id })
+      provider (asserts! (get active provider) ERR-INVALID-INPUT)
+      (asserts! false ERR-NOT-FOUND)
+    )
+    
+    ;; Create the new verification session
+    (map-set verification-sessions
+      { session-id: new-session-id }
+      {
+        provider-id: provider-id,
+        start-time: block-height,
+        end-time: none,
+        verifier-count: u0,
+        status: u1, ;; Active
+        merkle-root: none
+      }
+    )
+    
+    ;; Update the session counter
+    (var-set last-session-id new-session-id)
+    
+    ;; Return the new session ID
+    (ok new-session-id)
+  )
+)
+
 ;; Read-only functions
 
 ;; Get provider information
@@ -140,7 +199,17 @@
   (map-get? providers { provider-id: provider-id })
 )
 
+;; Get verification session information
+(define-read-only (get-verification-session (session-id uint))
+  (map-get? verification-sessions { session-id: session-id })
+)
+
 ;; Get the last provider ID
 (define-read-only (get-last-provider-id)
   (var-get last-provider-id)
+)
+
+;; Get the last session ID
+(define-read-only (get-last-session-id)
+  (var-get last-session-id)
 )
