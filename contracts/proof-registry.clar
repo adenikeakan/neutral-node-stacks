@@ -209,6 +209,48 @@
   )
 )
 
+;; Submit a batch of proofs (for efficiency)
+(define-public (submit-proof-batch
+                (provider-id uint)
+                (session-id uint)
+                (proof-type uint)
+                (proof-count uint)
+                (batch-merkle-root (buff 32))
+                (metadata (optional (string-utf8 256))))
+  (let
+    (
+      (new-proof-id (+ (var-get last-proof-id) u1))
+    )
+    ;; Ensure proof type is valid
+    (asserts! (or 
+                (is-eq proof-type PROOF-TYPE-MERKLE)
+                (is-eq proof-type PROOF-TYPE-ZK-SNARK))
+              ERR-INVALID-INPUT)
+    
+    ;; Store the batch proof
+    (map-set detailed-proofs
+      { proof-id: new-proof-id }
+      {
+        provider-id: provider-id,
+        session-id: session-id,
+        proof-type: proof-type,
+        proof-data: batch-merkle-root,  ;; Use the merkle root as the proof data
+        verification-status: PROOF-STATUS-PENDING,
+        submission-time: block-height,
+        verification-time: none,
+        verifier: tx-sender,
+        metadata: metadata
+      }
+    )
+    
+    ;; Update the proof counter
+    (var-set last-proof-id (+ new-proof-id (- proof-count u1)))
+    
+    ;; Return the first proof ID in the batch
+    (ok new-proof-id)
+  )
+)
+
 ;; Read-only functions
 
 ;; Get proof details
