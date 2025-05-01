@@ -8,6 +8,10 @@ requirements = []
 path = "contracts/neutrality-core.clar"
 depends_on = []
 
+[contracts.proof-registry]
+path = "contracts/proof-registry.clar"
+depends_on = []
+
 [repl]
 costs_version = 2
 parser_version = 2
