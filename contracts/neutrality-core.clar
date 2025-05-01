@@ -1,6 +1,6 @@
 ;; NeutralNode: Proof-of-Neutrality for Critical Infrastructure
 ;;
-;; Complete session management functionality
+;; Added basic proof tracking
 
 ;; Constants
 (define-constant CONTRACT-OWNER tx-sender)
@@ -43,6 +43,17 @@
     verifier-count: uint,
     status: uint,  ;; 0 = pending, 1 = active, 2 = completed, 3 = failed
     merkle-root: (optional (buff 32))
+  }
+)
+
+;; Map to associate proof hashes with verification sessions
+(define-map verification-proofs
+  { proof-hash: (buff 32) }
+  {
+    session-id: uint,
+    submission-time: uint,
+    verifier: principal,
+    metadata: (optional (string-utf8 256))
   }
 )
 
@@ -226,6 +237,37 @@
   )
 )
 
+;; Submit a proof for a verification session
+(define-public (submit-verification-proof
+                (session-id uint)
+                (proof-hash (buff 32))
+                (metadata (optional (string-utf8 256))))
+  (begin
+    ;; Ensure session exists
+    (match (map-get? verification-sessions { session-id: session-id })
+      session 
+      (begin
+        ;; Currently any principal can submit a proof, but in later phases
+        ;; this will be restricted to registered verifiers
+        
+        ;; Save the proof
+        (map-set verification-proofs
+          { proof-hash: proof-hash }
+          {
+            session-id: session-id,
+            submission-time: block-height,
+            verifier: tx-sender,
+            metadata: metadata
+          }
+        )
+        
+        (ok true)
+      )
+      ERR-NOT-FOUND
+    )
+  )
+)
+
 ;; Read-only functions
 
 ;; Get provider information
@@ -236,6 +278,11 @@
 ;; Get verification session information
 (define-read-only (get-verification-session (session-id uint))
   (map-get? verification-sessions { session-id: session-id })
+)
+
+;; Get proof information
+(define-read-only (get-verification-proof (proof-hash (buff 32)))
+  (map-get? verification-proofs { proof-hash: proof-hash })
 )
 
 ;; Get the last provider ID
